@@ -7,7 +7,7 @@ repository = "https://github.com/rust-lang/getopts"
 description = "getopts-like option parsing"
 categories = ["command-line-interface"]
 edition = "2021"
-rust-version = "1.66"
+rust-version = "1.70"
 
 [dependencies]
 unicode-width = { version = "0.2.0", optional = true }
