@@ -117,6 +117,7 @@ use std::fmt;
 use std::iter::{repeat, IntoIterator};
 use std::result;
 use std::str::FromStr;
+use std::sync::OnceLock;
 
 #[cfg(feature = "unicode")]
 use unicode_width::UnicodeWidthStr;
@@ -578,6 +579,7 @@ impl Options {
             opts,
             vals,
             free,
+            free_str: OnceLock::new(),
             args_end,
         })
     }
@@ -802,6 +804,8 @@ pub struct Matches {
     vals: Vec<Vec<(usize, Optval)>>,
     /// Free string fragments
     free: Vec<OsString>,
+    /// Free string fragments
+    free_str: OnceLock<Vec<String>>,
     /// Index of first free fragment after "--" separator
     args_end: Option<usize>,
 }
@@ -1172,8 +1176,27 @@ impl Matches {
     }
 
     /// Returns a vector of free arguments if they are strings.
-    pub fn free(&self) -> result::Result<Vec<&str>, Fail> {
-        self.free.iter().map(|os| non_string_to_err(os)).collect()
+    ///
+    /// This method panics if any of the arguments are not valid UTF-8. For a program that properly
+    /// handles all such arguments, prefer [`Self::free_os`].
+    pub fn free(&self) -> &[String] {
+        // Converts all arguments that are valid strings, skipping over those that are not. This is
+        // potentially wasteful as we panic later when we skipped over any of them but it's only
+        // done once and this way does not discard the work done.
+        let free_str = self.free_str.get_or_init(|| {
+            self.free
+                .iter()
+                .filter_map(|it| it.to_str().map(str::to_owned))
+                .collect()
+        });
+
+        assert_eq!(
+            free_str.len(),
+            self.free.len(),
+            "free arguments contained unhandled, non-UTF-8 strings"
+        );
+
+        free_str
     }
 
     /// Returns a slice to all free arguments.
